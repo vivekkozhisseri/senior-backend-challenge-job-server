@@ -1,0 +1,60 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: job-server
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jobs
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+  
+  sql:
+    init:
+      mode: always
+
+# Job Server Configuration
+job-server:
+  external-service:
+    url: http://mock-external:8081
+    timeout-seconds: 30
+    connect-timeout-ms: 5000
+    read-timeout-seconds: 30
+    write-timeout-seconds: 10
+  
+  async:
+    core-pool-size: 5
+    max-pool-size: 10
+    queue-capacity: 100
+    thread-name-prefix: job-processor-
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.jobserver: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
+

@@ -1,32 +1,43 @@
-version: "3.9"
-
 services:
-  db:
-    image: mysql:8
-    container_name: jobs-db
+  job-server-db:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: jobs
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "3306:3306"
+      - "5432:5432"  # Remove in production
     volumes:
-      - db_data:/var/lib/mysql
+      - job-server-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   mock-external:
     build: ./mock_service
-    container_name: mock-external
     ports:
       - "8081:8081"
+    restart: unless-stopped
 
-  # Candidate service
-  # job-server:
-  #   build: ./job-server
-  #   depends_on:
-  #     - db
-  #     - mock-external
-  #   ports:
-  #     - "8080:8080"
+  job-server:
+    build: ./job-server
+    depends_on:
+      job-server-db:
+        condition: service_healthy
+      mock-external:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://job-server-db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JOB_SERVER_EXTERNAL_SERVICE_URL: ${EXTERNAL_SERVICE_URL}
+    restart: unless-stopped
 
 volumes:
-  db_data:
-
+  job-server-db-data:

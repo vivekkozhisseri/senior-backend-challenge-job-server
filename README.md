@@ -1,105 +1,91 @@
-# Take-Home Challenge: Async Job Server 
+# Async Job Server
 
-## Overview
+Asynchronous job processing server with Java 21, Spring Boot 3.3, and Hexagonal Architecture.
 
-Build a job server that allows users to submit asynchronous jobs, processes them by calling an external service, and stores results in a database. The goal is to evaluate your skills in:
+## Architecture
 
-- Java
-- Clean architecture (Hexagonal / Ports & Adapters)
-- SOLID principles
-- Async / parallel processing
-- Database modeling with associations
-- Dockerization
+```
+Inbound Adapters → Application (Use Cases) → Domain (Entities)
+     (REST)                 ↓
+              Outbound Adapters (JPA, WebClient, Async)
+```
 
----
+- `domain/` - Business logic, no framework dependencies
+- `ports/inbound/` - Use case interfaces (driving)
+- `ports/outbound/` - Repository/service interfaces (driven)
+- `application/` - Use case orchestration
+- `adapters/inbound/rest/` - REST controllers, DTOs
+- `adapters/outbound/` - Persistence, external HTTP, async
 
-## Functional User Stories
+## Run
 
-### 1. Submit Job
-- **Story:** As a user, I want to submit a job with parameters, so that it will be processed asynchronously.  
-- **Acceptance Criteria:**  
-  - Submission immediately returns a `jobId` and `status=PENDING`.  
-  - Job is processed in the background without blocking the API request.  
-  - The job must call an external endpoint:
-    ```
-    POST http://mock-external:8081/process
-    Content-Type: application/json
-    Body: { "jobId": "<your-job-id>" }
-    ```
-  - The endpoint returns a delayed random result; your service should store it in the database.
+```bash
+cp .env.example .env
+docker compose up --build
+```
 
-### 2. Retrieve Job Status / Result
-- **Story:** As a user, I want to query the status and result of a submitted job.  
-- **Acceptance Criteria:**  
-  - Response includes `jobId`, `status` (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`), and any results or errors.  
-  - If tasks are part of the job, they should be returned with their own `status` and metadata.
+## Test
 
-### 3. Linked Entities
-- **Story:** As a user, I want jobs to be associated with my account and optionally a project.  
-- **Acceptance Criteria:**  
-  - Jobs reference a valid user (mandatory) and project (optional).  
-  - Users and projects can be assumed to already exist in the database.  
-  - Provide SQL insert statements (or migrations) for sample users and projects.  
-  - Job retrieval returns associated user and project information.
+```bash
+cd job-server && ./mvnw test
+```
 
-### 4. Async Processing
-- **Story:** As a system, jobs may involve calling a slow external service.  
-- **Acceptance Criteria:**  
-  - Multiple jobs can run in parallel without blocking API requests.  
-  - Failures, timeouts, or slow responses in one job do not block others.  
-  - Job results returned from `/process` must be persisted in the database.
+## API
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /jobs | Submit job |
+| GET | /jobs/{id} | Get job status |
 
-## Non-Functional Requirements / Guidelines
+### OpenAPI
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
 
-### Architecture
-- Write the project in Java in the framework of your choice
-- Follow Hexagonal / Ports & Adapters principles.  
-- Apply SOLID principles throughout (SRP, OCP, LSP, ISP, DIP).
+### Submit Job
+```bash
+curl -X POST http://localhost:8080/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "payload": "test"}'
+```
 
-### Persistence
-- Use a relational database (MySQL or Postgres).  
-- Model relationships using primary keys and foreign keys.  
-- Provide insert data for users and projects.
+### Sample Users/Projects
+| Type | ID | Name |
+|------|-----|------|
+| User | a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d | Alice |
+| User | b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e | John |
+| Project | c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f | Project Alpha |
+| Project | d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a | Project Beta |
 
-### Async / Concurrency
-- Jobs must be processed in parallel (worker pool, virtual threads, or asynchronous futures).  
-- Handle errors, retries, or timeouts gracefully.
+## Design Notes
 
-### Dockerization
-- Provide a `Dockerfile` for your service.  
-- Provide a `docker-compose.yml` to run:
-  - DB (MySQL/Postgres)  
-  - Mock external service at `http://mock-external:8081/process` (delayed random JSON response)
+- **Hexagonal Architecture**: Domain has no Spring dependencies; testable in isolation
+- **Async Processing**: `@Async` with configurable thread pool; request returns immediately
+- **Failure Handling**: Errors caught and stored; job marked FAILED; other jobs unaffected
 
-### Testing
-- Provide unit tests for at least:
-  - Job submission (happy path)  
-  - Retrieving a job and its results
+## Assumptions
 
----
+- Users and projects pre-exist in database
+- No authentication required
+- Single instance deployment (no distributed processing)
 
-## Deliverables
+## Known Issues
 
-1. Forked GitHub repository with:
-   - Source code  
-   - `Dockerfile` and `docker-compose.yml` modified with the candidate's service  
-   - DB migrations and insert data for sample users/projects  
-   - Unit tests
-2. `README.md` with:
-   - Instructions to run the service and tests  
-   - Design notes (architecture decisions, async handling, failure strategies)  
-   - Any assumptions made
+### Testcontainers + Docker Desktop 29.x
 
----
+Integration tests using Testcontainers may fail with Docker Desktop 29.x due to an API compatibility issue. Docker Desktop returns incomplete responses to API calls that Testcontainers uses for initialization.
 
-## Optional Bonus
-- Metrics/logging for jobs processed per minute or failure rates.  
-- Generated OpenAPI 3 specification from code, or generate code from a spec
+**Error:** `BadRequestException (Status 400)` with empty Docker info response
 
----
+**Official Issue:** https://github.com/testcontainers/testcontainers-java/issues/11419
 
-## Estimated Completion Time
-~4–6 hours
+**Workaround:** Run integration tests via docker compose instead:
 
+```bash
+docker compose up -d
+curl -X POST http://localhost:8080/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "payload": "test"}'
+```
+
+Unit tests (`./mvnw test`) work without Docker.

@@ -1,0 +1,11 @@
+# Docker profile configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://db:5432/jobs
+    username: postgres
+    password: postgres
+
+job-server:
+  external-service:
+    url: http://mock-external:8081
+
