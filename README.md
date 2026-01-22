@@ -113,19 +113,32 @@ curl -X POST http://localhost:8080/jobs \
 
 ### Testcontainers + Docker Desktop 29.x
 
-Integration tests using Testcontainers may fail with Docker Desktop 29.x due to an API compatibility issue. Docker Desktop returns incomplete responses to API calls that Testcontainers uses for initialization.
+Integration tests using Testcontainers may fail with Docker Desktop 29.x due to an API compatibility issue.
 
-**Error:** `BadRequestException (Status 400)` with empty Docker info response
+**Error:** `client version 1.32 is too old. Minimum supported API version is 1.44`
 
 **Official Issue:** https://github.com/testcontainers/testcontainers-java/issues/11419
 
-**Workaround:** Run integration tests via docker compose instead:
+**Workarounds:**
 
-```bash
-docker compose up -d
-curl -X POST http://localhost:8080/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "payload": "test"}'
-```
+1. **Set API version for tests only** - Create `src/test/resources/docker-java.properties`:
+   ```properties
+   api.version=1.44
+   ```
+
+2. **Set globally** - Create `~/.docker-java.properties`:
+   ```properties
+   api.version=1.44
+   ```
+
+3. **CI/CD** - Use `docker:28-dind` instead of `docker:dind`
+
+4. **Alternative** - Run integration tests via docker compose:
+   ```bash
+   docker compose up -d
+   curl -X POST http://localhost:8080/jobs \
+     -H "Content-Type: application/json" \
+     -d '{"userId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "payload": "test"}'
+   ```
 
 Unit tests (`./mvnw test`) work without Docker.
