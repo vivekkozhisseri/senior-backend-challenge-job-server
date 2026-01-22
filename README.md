@@ -4,18 +4,58 @@ Asynchronous job processing server with Java 21, Spring Boot 3.3, and Hexagonal 
 
 ## Architecture
 
+**Hexagonal Architecture (Ports & Adapters)** - The domain and application layers have zero framework dependencies, making them testable and portable.
+
 ```
-Inbound Adapters → Application (Use Cases) → Domain (Entities)
-     (REST)                 ↓
-              Outbound Adapters (JPA, WebClient, Async)
+                    ┌─────────────────────────────────────┐
+                    │         INBOUND ADAPTERS            │
+                    │         (REST Controller)           │
+                    └─────────────────┬───────────────────┘
+                                      │ calls
+                    ┌─────────────────▼───────────────────┐
+                    │         INBOUND PORTS               │
+                    │         (JobUseCases)               │
+                    └─────────────────┬───────────────────┘
+                                      │ implements
+┌─────────────────────────────────────▼───────────────────────────────────────┐
+│                          APPLICATION LAYER                                  │
+│                   JobService, JobProcessingService                          │
+│                      (Pure Java - No Spring)                                │
+│                                                                             │
+│    ┌──────────────────────────────────────────────────────────────────┐    │
+│    │                       DOMAIN LAYER                                │    │
+│    │              Job, JobStatus, User, Project                        │    │
+│    │                 (Pure Java - No Spring)                           │    │
+│    └──────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │ calls
+                    ┌─────────────────▼───────────────────┐
+                    │        OUTBOUND PORTS               │
+                    │  JobRepositoryPort                  │
+                    │  ExternalProcessorPort              │
+                    │  JobProcessorPort                   │
+                    └─────────────────┬───────────────────┘
+                                      │ implements
+                    ┌─────────────────▼───────────────────┐
+                    │        OUTBOUND ADAPTERS            │
+                    │   JPA/PostgreSQL, WebClient/HTTP    │
+                    │         @Async/ThreadPool           │
+                    └─────────────────────────────────────┘
 ```
 
-- `domain/` - Business logic, no framework dependencies
-- `ports/inbound/` - Use case interfaces (driving)
-- `ports/outbound/` - Repository/service interfaces (driven)
-- `application/` - Use case orchestration
-- `adapters/inbound/rest/` - REST controllers, DTOs
-- `adapters/outbound/` - Persistence, external HTTP, async
+### Package Structure
+
+| Package | Description |
+|---------|-------------|
+| `domain/` | Business entities and rules (no Spring dependencies) |
+| `ports/inbound/` | Interfaces defining use cases (driving ports) |
+| `ports/outbound/` | Interfaces for external dependencies (driven ports) |
+| `application/` | Use case implementations |
+| `adapters/inbound/rest/` | REST controllers, DTOs, exception handlers |
+| `adapters/outbound/persistence/` | JPA entities, repositories, mappers |
+| `adapters/outbound/external/` | HTTP client for external service |
+| `adapters/outbound/async/` | Async job processing with thread pool |
 
 ## Run
 
